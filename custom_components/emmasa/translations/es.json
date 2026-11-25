@@ -1,0 +1,108 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar con el Portal Ciudadano de EMMASA",
+        "description": "Introduce tus credenciales de la Oficina Virtual de EMMASA para importar tu consumo horario de agua y los datos de facturación.",
+        "data": {
+          "username": "Usuario (DNI / NIF)",
+          "password": "Contraseña"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reautenticar EMMASA",
+        "description": "Tu sesión de EMMASA para la cuenta {username} ha caducado o fue rechazada. Introduce de nuevo tu contraseña.",
+        "data": {
+          "password": "Contraseña"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurar credenciales de EMMASA",
+        "description": "Actualiza tus credenciales de la Oficina Virtual de EMMASA sin eliminar entidades ni perder el historial.",
+        "data": {
+          "username": "Usuario (DNI / NIF)",
+          "password": "Contraseña"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se pudo conectar con los servidores de EMMASA. Inténtalo de nuevo más tarde.",
+      "invalid_auth": "Usuario o contraseña incorrectos.",
+      "mfa_required": "Esta cuenta de EMMASA requiere verificación multifactor por SMS, que actualmente no está soportada.",
+      "password_change_required": "EMMASA solicita cambiar la contraseña en la Oficina Virtual web antes de iniciar sesión.",
+      "no_contracts": "No se encontraron contratos de suministro de agua asociados a esta cuenta.",
+      "unknown": "Se produjo un error inesperado."
+    },
+    "abort": {
+      "already_configured": "Esta cuenta de EMMASA ya está configurada.",
+      "reauth_successful": "Reautenticación con EMMASA completada correctamente.",
+      "reconfigure_successful": "Credenciales de EMMASA actualizadas correctamente.",
+      "unique_id_mismatch": "Las nuevas credenciales pertenecen a una cuenta de EMMASA distinta a la configurada."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de sondeo e historial de EMMASA",
+        "description": "Ajusta la frecuencia con la que Home Assistant consulta EMMASA y los días de historial horario a importar inicialmente.",
+        "data": {
+          "scan_interval_hours": "Intervalo de sondeo (horas)",
+          "backfill_days": "Historial horario inicial (días)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "meter_reading": {
+        "name": "Lectura del contador"
+      },
+      "current_period_consumption": {
+        "name": "Consumo del periodo actual"
+      },
+      "yesterday_consumption": {
+        "name": "Consumo de ayer"
+      },
+      "last_billed_consumption": {
+        "name": "Último consumo facturado"
+      },
+      "last_invoice_amount": {
+        "name": "Importe de la última factura"
+      },
+      "last_reading_timestamp": {
+        "name": "Última telelectura"
+      },
+      "telelectura_lag": {
+        "name": "Retardo de telelectura"
+      },
+      "daytime_alert_limit": {
+        "name": "Umbral alerta diurna"
+      },
+      "nighttime_alert_limit": {
+        "name": "Umbral alerta nocturna"
+      }
+    },
+    "binary_sensor": {
+      "telelectura_available": {
+        "name": "Telelectura disponible"
+      },
+      "daytime_alert_enabled": {
+        "name": "Alerta diurna activa"
+      },
+      "nighttime_alert_enabled": {
+        "name": "Alerta nocturna activa"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Error de autenticación con EMMASA. Vuelve a autenticar la integración."
+    },
+    "cannot_connect": {
+      "message": "No se pudo contactar con los servidores de EMMASA durante el inicio."
+    },
+    "update_failed": {
+      "message": "Error al actualizar los datos de consumo de agua de EMMASA: {error}"
+    }
+  }
+}

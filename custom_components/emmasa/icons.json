@@ -1,0 +1,53 @@
+{
+  "entity": {
+    "sensor": {
+      "meter_reading": {
+        "default": "mdi:water-meter"
+      },
+      "current_period_consumption": {
+        "default": "mdi:water-pump"
+      },
+      "yesterday_consumption": {
+        "default": "mdi:water-outline"
+      },
+      "last_billed_consumption": {
+        "default": "mdi:receipt-text-outline"
+      },
+      "last_invoice_amount": {
+        "default": "mdi:currency-eur"
+      },
+      "last_reading_timestamp": {
+        "default": "mdi:clock-check-outline"
+      },
+      "telelectura_lag": {
+        "default": "mdi:timer-sand"
+      },
+      "daytime_alert_limit": {
+        "default": "mdi:weather-sunny-alert"
+      },
+      "nighttime_alert_limit": {
+        "default": "mdi:weather-night"
+      }
+    },
+    "binary_sensor": {
+      "telelectura_available": {
+        "default": "mdi:access-point-check",
+        "state": {
+          "off": "mdi:access-point-off"
+        }
+      },
+      "daytime_alert_enabled": {
+        "default": "mdi:bell-outline",
+        "state": {
+          "on": "mdi:bell-ring"
+        }
+      },
+      "nighttime_alert_enabled": {
+        "default": "mdi:bell-sleep-outline",
+        "state": {
+          "on": "mdi:bell-ring"
+        }
+      }
+    }
+  }
+}

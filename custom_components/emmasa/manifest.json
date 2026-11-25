@@ -1,0 +1,14 @@
+{
+  "domain": "emmasa",
+  "name": "EMMASA (Portal Ciudadano)",
+  "codeowners": ["@alejandrojara"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://github.com/alejandrojara/ha-emmasa",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/alejandrojara/ha-emmasa/issues",
+  "loggers": ["custom_components.emmasa"],
+  "requirements": [],
+  "version": "0.1.0"
+}

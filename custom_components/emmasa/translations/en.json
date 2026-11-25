@@ -1,0 +1,108 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to EMMASA Portal Ciudadano",
+        "description": "Enter your EMMASA Oficina Virtual credentials to import hourly water consumption and billing summaries.",
+        "data": {
+          "username": "Username (DNI / NIF)",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate EMMASA",
+        "description": "Your EMMASA session for account {username} has expired or was rejected. Please enter your password again.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure EMMASA credentials",
+        "description": "Update your EMMASA Oficina Virtual credentials without removing existing entities or history.",
+        "data": {
+          "username": "Username (DNI / NIF)",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to EMMASA servers. Please try again later.",
+      "invalid_auth": "Invalid username or password.",
+      "mfa_required": "This EMMASA account requires SMS multi-factor authentication, which is not currently supported.",
+      "password_change_required": "EMMASA requires a password change in the Oficina Virtual web portal before signing in.",
+      "no_contracts": "No water supply contracts were found for this EMMASA account.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This EMMASA account is already configured.",
+      "reauth_successful": "Reauthentication with EMMASA succeeded.",
+      "reconfigure_successful": "EMMASA credentials updated successfully.",
+      "unique_id_mismatch": "The new credentials belong to a different EMMASA account than the one being reconfigured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EMMASA polling and history options",
+        "description": "Adjust how often Home Assistant polls EMMASA and how many days of hourly history to backfill on initial sync.",
+        "data": {
+          "scan_interval_hours": "Polling interval (hours)",
+          "backfill_days": "Initial hourly history backfill (days)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "meter_reading": {
+        "name": "Meter reading"
+      },
+      "current_period_consumption": {
+        "name": "Current period consumption"
+      },
+      "yesterday_consumption": {
+        "name": "Yesterday consumption"
+      },
+      "last_billed_consumption": {
+        "name": "Last billed consumption"
+      },
+      "last_invoice_amount": {
+        "name": "Last invoice amount"
+      },
+      "last_reading_timestamp": {
+        "name": "Last telelectura reading"
+      },
+      "telelectura_lag": {
+        "name": "Telelectura publication lag"
+      },
+      "daytime_alert_limit": {
+        "name": "Daytime alert threshold"
+      },
+      "nighttime_alert_limit": {
+        "name": "Nighttime alert threshold"
+      }
+    },
+    "binary_sensor": {
+      "telelectura_available": {
+        "name": "Telelectura available"
+      },
+      "daytime_alert_enabled": {
+        "name": "Daytime alert enabled"
+      },
+      "nighttime_alert_enabled": {
+        "name": "Nighttime alert enabled"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Authentication with EMMASA failed. Please reauthenticate the integration."
+    },
+    "cannot_connect": {
+      "message": "Unable to reach EMMASA servers during setup."
+    },
+    "update_failed": {
+      "message": "Error updating EMMASA water consumption data: {error}"
+    }
+  }
+}
