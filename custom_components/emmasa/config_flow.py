@@ -45,11 +45,16 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-_PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+_USERNAME_SELECTOR = TextSelector(
+    TextSelectorConfig(type=TextSelectorType.TEXT, autocomplete="username")
+)
+_PASSWORD_SELECTOR = TextSelector(
+    TextSelectorConfig(type=TextSelectorType.PASSWORD, autocomplete="current-password")
+)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_USERNAME): str,
+        vol.Required(CONF_USERNAME): _USERNAME_SELECTOR,
         vol.Required(CONF_PASSWORD): _PASSWORD_SELECTOR,
     }
 )
@@ -71,12 +76,15 @@ class EmmasaConfigFlow(ConfigFlow, domain=DOMAIN):
         password: str,
     ) -> tuple[UserProfile, TokenBundle, int]:
         """Validate credentials against Acuama IdP and Portal Ciudadano BFF."""
+        if not username or not password:
+            raise EmmasaAuthError("Username and password must not be empty")
         session = async_get_clientsession(self.hass)
         client = EmmasaApiClient(session=session, username=username, password=password)
         tokens = await client.async_authenticate()
         profile = await client.async_get_profile()
         contracts = await client.async_get_contracts()
-        await client.async_logout()
+        if not contracts:
+            await client.async_logout()
         return profile, tokens, len(contracts)
 
     async def async_step_user(
@@ -160,12 +168,15 @@ class EmmasaConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected error during EMMASA reauthentication")
                 errors["base"] = "unknown"
             else:
-                updates: dict[str, Any] = {CONF_PASSWORD: password}
+                new_data: dict[str, Any] = {
+                    CONF_USERNAME: username,
+                    CONF_PASSWORD: password,
+                }
                 if tokens.refresh_token:
-                    updates[CONF_REFRESH_TOKEN] = tokens.refresh_token
+                    new_data[CONF_REFRESH_TOKEN] = tokens.refresh_token
                 return self.async_update_reload_and_abort(
                     reauth_entry,
-                    data_updates=updates,
+                    data=new_data,
                 )
 
         return self.async_show_form(
@@ -210,22 +221,22 @@ class EmmasaConfigFlow(ConfigFlow, domain=DOMAIN):
                     unique_id = _normalize_username(profile.login)
                     await self.async_set_unique_id(unique_id)
                     self._abort_if_unique_id_mismatch()
-                    updates: dict[str, Any] = {
+                    new_data: dict[str, Any] = {
                         CONF_USERNAME: unique_id,
                         CONF_PASSWORD: password,
                     }
                     if tokens.refresh_token:
-                        updates[CONF_REFRESH_TOKEN] = tokens.refresh_token
+                        new_data[CONF_REFRESH_TOKEN] = tokens.refresh_token
                     return self.async_update_reload_and_abort(
                         reconfigure_entry,
-                        data_updates=updates,
+                        data=new_data,
                     )
 
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_USERNAME, default=current_username): str,
+                    vol.Required(CONF_USERNAME, default=current_username): _USERNAME_SELECTOR,
                     vol.Required(CONF_PASSWORD): _PASSWORD_SELECTOR,
                 }
             ),

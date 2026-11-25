@@ -1,6 +1,5 @@
 {
-  "name": "EMMASA",
-  "homeassistant": "2026.10.0",
-  "render_readme": true,
-  "zip_release": false
+  "name": "EMMASA (Portal Ciudadano)",
+  "country": ["ES"],
+  "homeassistant": "2026.10.0"
 }

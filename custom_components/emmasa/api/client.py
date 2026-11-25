@@ -178,13 +178,31 @@ def _extract_frame_rows(ds_response: dict[str, Any], ref_id: str) -> list[dict[s
     return rows
 
 
+def _parse_epoch_seconds(raw: Any, default_ttl: float) -> float:
+    """Parse a numeric or string UNIX timestamp (seconds or ms), falling back to TTL."""
+    if isinstance(raw, bool):
+        return time.time() + default_ttl
+    if isinstance(raw, (int, float)):
+        val = float(raw)
+    elif isinstance(raw, str) and raw.strip():
+        try:
+            val = float(raw.strip())
+        except ValueError:
+            return time.time() + default_ttl
+    else:
+        return time.time() + default_ttl
+    if val <= 0:
+        return time.time() + default_ttl
+    return val / 1000.0 if val > 1e11 else val
+
+
 def _compute_yesterday_liters_from_hourly(
     readings: tuple[HourlyReading, ...],
     now_utc: datetime,
-) -> float | None:
+) -> tuple[float | None, str | None]:
     """Fallback calculation of yesterday's consumption in Atlantic/Canary from hourly vol_h."""
     if not readings:
-        return None
+        return None, None
     yesterday_date = (now_utc.astimezone(_CANARY_TZ) - timedelta(days=1)).date()
     day_values = [
         r.volume_m3
@@ -192,8 +210,8 @@ def _compute_yesterday_liters_from_hourly(
         if r.timestamp_utc.astimezone(_CANARY_TZ).date() == yesterday_date
     ]
     if not day_values:
-        return None
-    return round(sum(day_values) * 1000.0, 1)
+        return None, None
+    return round(sum(day_values) * 1000.0, 1), yesterday_date.isoformat()
 
 
 class EmmasaApiClient:
@@ -228,6 +246,7 @@ class EmmasaApiClient:
         self._grafana_session: GrafanaSession | None = None
         self._bff_loaded_for_token: str | None = None
         self._auth_lock = asyncio.Lock()
+        self._grafana_lock = asyncio.Lock()
 
     @property
     def token_bundle(self) -> TokenBundle | None:
@@ -404,7 +423,7 @@ class EmmasaApiClient:
             next_url = urljoin("https://acuamaemmasa.sacyr.com/", redirect_url)
             for _ in range(5):
                 parsed = urlparse(next_url)
-                if parsed.netloc != "acuamaemmasa.sacyr.com":
+                if parsed.scheme != "https" or parsed.netloc != "acuamaemmasa.sacyr.com":
                     break
                 hop_headers = self._acuama_headers()
                 if cookie_header:
@@ -526,7 +545,12 @@ class EmmasaApiClient:
             await self._load_bff_session(tokens.access_token)
             return tokens
 
-    async def async_ensure_authenticated(self, *, force_refresh: bool = False) -> str:
+    async def async_ensure_authenticated(
+        self,
+        *,
+        force_refresh: bool = False,
+        failed_token: str | None = None,
+    ) -> str:
         """Ensure a valid OAuth2 access token and BFF session exist, returning the JWT."""
         if (
             not force_refresh
@@ -538,8 +562,15 @@ class EmmasaApiClient:
             return self._tokens.access_token
 
         async with self._auth_lock:
+            token_already_rotated = (
+                failed_token is not None
+                and self._tokens is not None
+                and bool(self._tokens.access_token)
+                and self._tokens.access_token != failed_token
+                and not self._tokens.is_expired()
+            )
             if (
-                not force_refresh
+                (not force_refresh or token_already_rotated)
                 and self._tokens is not None
                 and self._tokens.access_token
                 and not self._tokens.is_expired()
@@ -580,7 +611,10 @@ class EmmasaApiClient:
             json_data=json_data,
         )
         if status == 401:
-            access_token = await self.async_ensure_authenticated(force_refresh=True)
+            access_token = await self.async_ensure_authenticated(
+                force_refresh=True,
+                failed_token=access_token,
+            )
             status, body, _ = await self._request_json(
                 method,
                 url,
@@ -594,7 +628,12 @@ class EmmasaApiClient:
             raise EmmasaConnectionError(f"Portal API {path} failed (HTTP {status})")
         return body
 
-    async def async_ensure_grafana_session(self, *, force_refresh: bool = False) -> GrafanaSession:
+    async def async_ensure_grafana_session(
+        self,
+        *,
+        force_refresh: bool = False,
+        failed_session_token: str | None = None,
+    ) -> GrafanaSession:
         """Obtain or renew the short-lived (~10 min) Grafana session cookie."""
         if (
             not force_refresh
@@ -603,20 +642,32 @@ class EmmasaApiClient:
         ):
             return self._grafana_session
 
-        body = await self._portal_request("POST", "/auth/grafana", json_data={})
-        if not isinstance(body, dict) or not body.get("grafana_session"):
-            raise EmmasaConnectionError("Portal /auth/grafana did not return grafana_session")
-        raw_expiry = body.get("grafana_session_expiry")
-        expires_at = (
-            float(raw_expiry)
-            if isinstance(raw_expiry, (int, float, str)) and str(raw_expiry).isdigit()
-            else time.time() + _DEFAULT_GRAFANA_TTL_SECONDS
-        )
-        self._grafana_session = GrafanaSession(
-            session_token=str(body["grafana_session"]),
-            expires_at=expires_at,
-        )
-        return self._grafana_session
+        async with self._grafana_lock:
+            session_already_renewed = (
+                failed_session_token is not None
+                and self._grafana_session is not None
+                and self._grafana_session.session_token != failed_session_token
+                and not self._grafana_session.is_expired()
+            )
+            if (
+                (not force_refresh or session_already_renewed)
+                and self._grafana_session is not None
+                and not self._grafana_session.is_expired()
+            ):
+                return self._grafana_session
+
+            body = await self._portal_request("POST", "/auth/grafana", json_data={})
+            if not isinstance(body, dict) or not body.get("grafana_session"):
+                raise EmmasaConnectionError("Portal /auth/grafana did not return grafana_session")
+            expires_at = _parse_epoch_seconds(
+                body.get("grafana_session_expiry"),
+                _DEFAULT_GRAFANA_TTL_SECONDS,
+            )
+            self._grafana_session = GrafanaSession(
+                session_token=str(body["grafana_session"]),
+                expires_at=expires_at,
+            )
+            return self._grafana_session
 
     async def async_get_profile(self) -> UserProfile:
         """Fetch authenticated user profile from /api/auth/me."""
@@ -653,7 +704,11 @@ class EmmasaApiClient:
             raw_id = item.get("id") or item.get("contratoId")
             if not raw_id:
                 continue
-            contract_id = validate_contract_uuid(str(raw_id))
+            try:
+                contract_id = validate_contract_uuid(str(raw_id))
+            except ValueError:
+                _LOGGER.warning("Skipping EMMASA contract entry with invalid UUID")
+                continue
             name = str(item.get("name") or contract_id[:8]).strip()
             allows_alerts = bool(item.get("allowsAlertConfiguration", False))
             contracts.append(
@@ -708,7 +763,10 @@ class EmmasaApiClient:
             headers=self._grafana_headers(grafana),
         )
         if status in (401, 403):
-            grafana = await self.async_ensure_grafana_session(force_refresh=True)
+            grafana = await self.async_ensure_grafana_session(
+                force_refresh=True,
+                failed_session_token=grafana.session_token,
+            )
             status, body, _ = await self._request_json(
                 "GET",
                 f"{GRAFANA_BASE}/api/dashboards/uid/{GRAFANA_CONSUMOS_DASHBOARD_UID}",
@@ -755,7 +813,10 @@ class EmmasaApiClient:
         )
 
         if status in (401, 403):
-            grafana = await self.async_ensure_grafana_session(force_refresh=True)
+            grafana = await self.async_ensure_grafana_session(
+                force_refresh=True,
+                failed_session_token=grafana.session_token,
+            )
             status, body, _ = await self._request_json(
                 "POST",
                 f"{GRAFANA_BASE}/api/ds/query",
@@ -860,13 +921,18 @@ class EmmasaApiClient:
 
         # 4. Yesterday / latest closed complete day consumption (L)
         yesterday_liters: float | None = None
+        yesterday_date: str | None = None
         daily_rows = _extract_frame_rows(ds_response, "daily")
         if daily_rows:
             val = daily_rows[0].get("volumen_litros")
+            raw_date = daily_rows[0].get("fecha_simple")
             if isinstance(val, (int, float)):
                 yesterday_liters = round(float(val), 1)
+                yesterday_date = str(raw_date) if raw_date else None
         if yesterday_liters is None:
-            yesterday_liters = _compute_yesterday_liters_from_hourly(hourly_readings, now_utc)
+            yesterday_liters, yesterday_date = _compute_yesterday_liters_from_hourly(
+                hourly_readings, now_utc
+            )
 
         # 5. Latest officially billed bimonthly consumption
         latest_billed: BilledConsumption | None = None
@@ -922,6 +988,7 @@ class EmmasaApiClient:
             latest_invoice=latest_invoice,
             alerts=alerts,
             last_reading_timestamp_utc=last_reading_ts,
+            yesterday_consumption_date=yesterday_date,
         )
 
     async def async_logout(self) -> None:

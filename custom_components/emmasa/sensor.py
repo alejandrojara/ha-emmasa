@@ -107,6 +107,11 @@ SENSOR_DESCRIPTIONS: tuple[EmmasaSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfVolume.LITERS,
         suggested_display_precision=0,
         value_fn=lambda s: s.yesterday_consumption_liters,
+        attributes_fn=lambda s: (
+            {"reading_date": s.yesterday_consumption_date}
+            if s.yesterday_consumption_date is not None
+            else None
+        ),
     ),
     EmmasaSensorEntityDescription(
         key="last_billed_consumption",
@@ -169,7 +174,7 @@ SENSOR_DESCRIPTIONS: tuple[EmmasaSensorEntityDescription, ...] = (
     EmmasaSensorEntityDescription(
         key="daytime_alert_limit",
         translation_key="daytime_alert_limit",
-        device_class=SensorDeviceClass.WATER,
+        device_class=SensorDeviceClass.VOLUME,
         native_unit_of_measurement=UnitOfVolume.LITERS,
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -183,7 +188,7 @@ SENSOR_DESCRIPTIONS: tuple[EmmasaSensorEntityDescription, ...] = (
     EmmasaSensorEntityDescription(
         key="nighttime_alert_limit",
         translation_key="nighttime_alert_limit",
-        device_class=SensorDeviceClass.WATER,
+        device_class=SensorDeviceClass.VOLUME,
         native_unit_of_measurement=UnitOfVolume.LITERS,
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,

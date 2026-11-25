@@ -68,13 +68,15 @@ async def test_coordinator_backfill_incremental_and_idempotent(
     assert data2.imported_statistics_counts[sample_contract.contract_id] == 0
     assert len(mock_recorder_stats["added_calls"]) == 1
 
-    # 3. Incremental sync with one newer hour -> continues monotonically from 0.055
+    # 3. Incremental sync with one newer completed hour + one incomplete current hour
     newer_ts = sample_snapshot.hourly_readings[-1].timestamp_utc + timedelta(hours=1)
+    incomplete_current_hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     updated_snapshot = ContractSnapshot(
         contract=sample_contract,
         hourly_readings=(
             *sample_snapshot.hourly_readings,
             HourlyReading(timestamp_utc=newer_ts, volume_m3=0.015),
+            HourlyReading(timestamp_utc=incomplete_current_hour, volume_m3=0.999),
         ),
         latest_meter_reading=sample_snapshot.latest_meter_reading,
         current_period_consumption=sample_snapshot.current_period_consumption,
@@ -133,7 +135,17 @@ async def test_coordinator_removes_stale_devices(
     sample_snapshot: ContractSnapshot,
     mock_recorder_stats: dict[str, Any],
 ) -> None:
-    """When a contract is removed from the account, its stale device is dissociated."""
+    """Stale devices persisted across restarts and contracts removed later are both cleaned up."""
+    mock_config_entry.add_to_hass(hass)
+    dev_reg = dr.async_get(hass)
+    # Pre-register a stale device from a previous HA run
+    stale_pre_id = "99999999-8888-4777-8666-555555555555"
+    dev_reg.async_get_or_create(
+        config_entry_id=mock_config_entry.entry_id,
+        identifiers={(DOMAIN, stale_pre_id)},
+        name="EMMASA Contrato Old",
+    )
+
     snapshot_2 = ContractSnapshot(
         contract=sample_contract_2,
         hourly_readings=(),
@@ -148,11 +160,17 @@ async def test_coordinator_removes_stale_devices(
     mock_emmasa_client.async_get_contracts.return_value = [sample_contract, sample_contract_2]
     mock_emmasa_client.async_fetch_contract_snapshot.side_effect = [sample_snapshot, snapshot_2]
 
-    mock_config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    dev_reg = dr.async_get(hass)
+    # Pre-existing stale device was removed on startup refresh
+    assert (
+        dev_reg.async_get_device_by_identifier(
+            (DOMAIN, stale_pre_id),
+            mock_config_entry.entry_id,
+        )
+        is None
+    )
     assert (
         dev_reg.async_get_device_by_identifier(
             (DOMAIN, sample_contract_2.contract_id),
@@ -161,7 +179,7 @@ async def test_coordinator_removes_stale_devices(
         is not None
     )
 
-    # Second contract disappears
+    # Second contract disappears on a subsequent refresh
     mock_emmasa_client.async_get_contracts.return_value = [sample_contract]
     mock_emmasa_client.async_fetch_contract_snapshot.side_effect = None
     mock_emmasa_client.async_fetch_contract_snapshot.return_value = sample_snapshot

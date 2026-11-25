@@ -165,6 +165,9 @@ async def test_reauth_flow_success_and_errors(
         assert err_res["errors"] == {"base": err_key}
 
     mock_emmasa_client.async_authenticate.side_effect = None
+    mock_emmasa_client.async_authenticate.return_value = type(
+        mock_emmasa_client.token_bundle
+    )(access_token="fresh-jwt", refresh_token=None, expires_at=9999999999.0)
     with patch("custom_components.emmasa.async_setup_entry", return_value=True):
         ok_res = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -175,6 +178,7 @@ async def test_reauth_flow_success_and_errors(
     assert ok_res["type"] is FlowResultType.ABORT
     assert ok_res["reason"] == "reauth_successful"
     assert mock_config_entry.data[CONF_PASSWORD] == "new-password"
+    assert CONF_REFRESH_TOKEN not in mock_config_entry.data
 
 
 async def test_reconfigure_flow_success_errors_and_mismatch(

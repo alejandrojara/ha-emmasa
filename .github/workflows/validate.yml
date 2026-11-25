@@ -6,6 +6,9 @@ on:
   pull_request:
   schedule:
     - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+permissions: {}
 
 jobs:
   hassfest:
@@ -15,11 +18,11 @@ jobs:
       - name: Run Home Assistant hassfest
         uses: home-assistant/actions/hassfest@master
 
-  hacs:
+  marketplace:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Validate HACS compatibility
+      - name: Validate Home Assistant Marketplace / HACS compatibility
         uses: hacs/action@main
         with:
           category: integration

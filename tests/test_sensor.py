@@ -66,6 +66,7 @@ async def test_sensors_setup_states_attributes_and_device_info(
     assert yesterday_state is not None
     assert yesterday_state.state == "177.0"
     assert yesterday_state.attributes["unit_of_measurement"] == UnitOfVolume.LITERS
+    assert yesterday_state.attributes["reading_date"] == "2026-11-24"
 
     billed_state = hass.states.get("sensor.emmasa_contrato_12345_last_billed_consumption")
     assert billed_state is not None
@@ -103,10 +104,12 @@ async def test_sensors_setup_states_attributes_and_device_info(
     day_limit = hass.states.get("sensor.emmasa_contrato_12345_daytime_alert_threshold")
     assert day_limit is not None
     assert day_limit.state == "500.0"
+    assert day_limit.attributes["device_class"] == SensorDeviceClass.VOLUME
 
     night_limit = hass.states.get("sensor.emmasa_contrato_12345_nighttime_alert_threshold")
     assert night_limit is not None
     assert night_limit.state == "100.0"
+    assert night_limit.attributes["device_class"] == SensorDeviceClass.VOLUME
 
     lag = hass.states.get("sensor.emmasa_contrato_12345_telelectura_publication_lag")
     assert lag is not None

@@ -119,3 +119,4 @@ class ContractSnapshot:
     latest_invoice: InvoiceSummary | None
     alerts: tuple[ContractAlert, ...]
     last_reading_timestamp_utc: datetime | None
+    yesterday_consumption_date: str | None = None

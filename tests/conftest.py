@@ -147,6 +147,7 @@ def sample_snapshot(sample_contract: ContractInfo) -> ContractSnapshot:
             ),
         ),
         last_reading_timestamp_utc=base_ts + timedelta(hours=2),
+        yesterday_consumption_date="2026-11-24",
     )
 
 

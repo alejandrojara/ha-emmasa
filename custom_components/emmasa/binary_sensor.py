@@ -37,7 +37,9 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[EmmasaBinarySensorEntityDescription, ...] = (
         translation_key="telelectura_available",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
-        is_on_fn=lambda s: s.contract.allows_alert_configuration,
+        is_on_fn=lambda s: bool(
+            s.contract.allows_alert_configuration or s.last_reading_timestamp_utc is not None
+        ),
     ),
     EmmasaBinarySensorEntityDescription(
         key="daytime_alert_enabled",

@@ -1,6 +1,7 @@
 {
   "domain": "emmasa",
   "name": "EMMASA (Portal Ciudadano)",
+  "categories": ["local_services", "water.meters_leak_detection"],
   "codeowners": ["@alejandrojara"],
   "config_flow": true,
   "dependencies": ["recorder"],

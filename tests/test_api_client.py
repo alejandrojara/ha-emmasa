@@ -36,6 +36,7 @@ from custom_components.emmasa.api.client import (
     _decode_jwt_exp,
     _epoch_to_utc_datetime,
     _extract_frame_rows,
+    _parse_epoch_seconds,
 )
 from custom_components.emmasa.api.const import (
     ACUAMA_API_BASE,
@@ -261,15 +262,21 @@ def test_client_low_level_helpers() -> None:
         == []
     )
 
+    assert _parse_epoch_seconds(1700000000, 600.0) == 1700000000.0
+    assert _parse_epoch_seconds(1700000000.5, 600.0) == 1700000000.5
+    assert _parse_epoch_seconds("1700000000.5", 600.0) == 1700000000.5
+    assert _parse_epoch_seconds(1700000000000, 600.0) == 1700000000.0
+    assert _parse_epoch_seconds(True, 600.0) > time.time() + 500
+    assert _parse_epoch_seconds(-5, 600.0) > time.time() + 500
+    assert _parse_epoch_seconds("not-a-num", 600.0) > time.time() + 500
+    assert _parse_epoch_seconds(None, 600.0) > time.time() + 500
+
     now = datetime(2026, 11, 25, 12, 0, tzinfo=UTC)
-    assert _compute_yesterday_liters_from_hourly((), now) is None
-    assert (
-        _compute_yesterday_liters_from_hourly(
-            (HourlyReading(timestamp_utc=now, volume_m3=0.1),),
-            now,
-        )
-        is None
-    )
+    assert _compute_yesterday_liters_from_hourly((), now) == (None, None)
+    assert _compute_yesterday_liters_from_hourly(
+        (HourlyReading(timestamp_utc=now, volume_m3=0.1),),
+        now,
+    ) == (None, None)
 
 
 async def test_full_pkce_login_and_token_callback() -> None:
@@ -631,6 +638,7 @@ async def test_bff_profile_contracts_alerts_and_401_retry() -> None:
             "content": [
                 "skip-non-dict",
                 {"name": "missing-id"},
+                {"id": "not-a-valid-uuid", "name": "corrupt"},
                 {
                     "id": MOCK_CONTRACT_UUID,
                     "name": MOCK_CONTRACT_NAME,
@@ -872,6 +880,7 @@ async def test_fetch_contract_snapshot_batch_and_grafana_recovery() -> None:
     assert snapshot.current_period_consumption is not None
     assert snapshot.current_period_consumption.volume_m3 == 13.1
     assert snapshot.yesterday_consumption_liters == 177.0
+    assert snapshot.yesterday_consumption_date == "2026-11-24"
     assert snapshot.latest_billed_consumption is not None
     assert snapshot.latest_billed_consumption.period_label == "Sep-Oct 2026"
     assert snapshot.latest_invoice is not None
@@ -994,9 +1003,66 @@ async def test_fetch_contract_snapshot_daily_fallback_and_query_error() -> None:
             yesterday_h1 - timedelta(days=1),
         )
         assert snapshot.yesterday_consumption_liters == 175.0
+        assert snapshot.yesterday_consumption_date is not None
 
         with pytest.raises(EmmasaQueryError):
             await client.async_fetch_contract_snapshot(contract, yesterday_h1)
+
+
+async def test_concurrent_401_and_grafana_session_deduplication() -> None:
+    """Concurrent forced refreshes with the same failed token/session deduplicate cleanly."""
+    mocker = AiohttpClientMocker()
+    jwt_old = make_test_jwt(exp=time.time() + 3600)
+    jwt_new = make_test_jwt(exp=time.time() + 7200)
+    refresh_calls = 0
+    grafana_calls = 0
+
+    async def refresh_cb(method: str, url: URL, data: Any) -> AiohttpClientMockResponse:
+        nonlocal refresh_calls
+        refresh_calls += 1
+        return _mock_resp(
+            "POST",
+            str(url),
+            status=200,
+            json={"access_token": jwt_new, "refresh_token": "rt-new", "expires_in": 7200},
+        )
+
+    async def grafana_cb(method: str, url: URL, data: Any) -> AiohttpClientMockResponse:
+        nonlocal grafana_calls
+        grafana_calls += 1
+        return _mock_resp(
+            "POST",
+            str(url),
+            status=200,
+            json={"grafana_session": "gs-dedup", "grafana_session_expiry": time.time() + 600.5},
+        )
+
+    mocker.post(f"{ACUAMA_API_BASE}/UsuariosOnline/token", side_effect=refresh_cb)
+    mocker.post(f"{PORTAL_API_BASE}/auth/load", status=204)
+    mocker.post(f"{PORTAL_API_BASE}/auth/grafana", side_effect=grafana_cb)
+
+    async with mocker.create_session(asyncio.get_running_loop()) as session:
+        client = EmmasaApiClient(
+            session,
+            MOCK_USERNAME,
+            MOCK_PASSWORD,
+            access_token=jwt_old,
+            refresh_token="rt-old",
+            expires_at=time.time() + 3600,
+        )
+        tokens = await asyncio.gather(
+            client.async_ensure_authenticated(force_refresh=True, failed_token=jwt_old),
+            client.async_ensure_authenticated(force_refresh=True, failed_token=jwt_old),
+        )
+        sessions = await asyncio.gather(
+            client.async_ensure_grafana_session(force_refresh=True, failed_session_token="gs-old"),
+            client.async_ensure_grafana_session(force_refresh=True, failed_session_token="gs-old"),
+        )
+
+    assert tokens == [jwt_new, jwt_new]
+    assert refresh_calls == 1
+    assert [s.session_token for s in sessions] == ["gs-dedup", "gs-dedup"]
+    assert grafana_calls == 1
 
 
 async def test_network_error_and_non_json_responses() -> None:

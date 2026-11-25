@@ -41,6 +41,7 @@ from .const import (
     DEFAULT_BACKFILL_DAYS,
     DEFAULT_SCAN_INTERVAL_HOURS,
     DOMAIN,
+    MAX_BACKFILL_DAYS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -89,7 +90,6 @@ class EmmasaDataUpdateCoordinator(DataUpdateCoordinator[EmmasaCoordinatorData]):
         self._backfill_days = int(
             config_entry.options.get(CONF_BACKFILL_DAYS, DEFAULT_BACKFILL_DAYS)
         )
-        self._known_contract_ids: set[str] = set()
 
     async def _async_get_last_statistic(
         self,
@@ -119,12 +119,14 @@ class EmmasaDataUpdateCoordinator(DataUpdateCoordinator[EmmasaCoordinatorData]):
         snapshot: ContractSnapshot,
         last_start_utc: datetime | None,
         running_sum: float,
+        current_hour_utc: datetime,
     ) -> int:
-        """Import strictly newer hourly readings into Home Assistant external statistics."""
+        """Import strictly newer completed hourly readings into HA external statistics."""
         new_readings = [
             reading
             for reading in snapshot.hourly_readings
-            if last_start_utc is None or reading.timestamp_utc > last_start_utc
+            if reading.timestamp_utc < current_hour_utc
+            and (last_start_utc is None or reading.timestamp_utc > last_start_utc)
         ]
         if not new_readings:
             return 0
@@ -162,17 +164,15 @@ class EmmasaDataUpdateCoordinator(DataUpdateCoordinator[EmmasaCoordinatorData]):
         return len(stats)
 
     def _remove_stale_devices(self, active_contract_ids: set[str]) -> None:
-        """Remove devices for contracts that are no longer associated with the account."""
-        stale_ids = self._known_contract_ids - active_contract_ids
-        if not stale_ids:
+        """Remove persisted devices for contracts no longer associated with the account."""
+        if not active_contract_ids:
             return
         dev_reg = dr.async_get(self.hass)
-        for stale_id in stale_ids:
-            device = dev_reg.async_get_device_by_identifier(
-                (DOMAIN, stale_id),
-                self.config_entry.entry_id,
-            )
-            if device is not None:
+        for device in dr.async_entries_for_config_entry(dev_reg, self.config_entry.entry_id):
+            if not any(
+                domain == DOMAIN and identifier in active_contract_ids
+                for domain, identifier in device.identifiers
+            ):
                 dev_reg.async_update_device(
                     device_id=device.id,
                     remove_config_entry_id=self.config_entry.entry_id,
@@ -181,6 +181,8 @@ class EmmasaDataUpdateCoordinator(DataUpdateCoordinator[EmmasaCoordinatorData]):
     async def _async_update_data(self) -> EmmasaCoordinatorData:
         """Fetch contracts, telemetry, billing, alerts, and update external statistics."""
         now_utc = datetime.now(UTC)
+        current_hour_utc = now_utc.replace(minute=0, second=0, microsecond=0)
+        max_lookback_utc = current_hour_utc - timedelta(days=MAX_BACKFILL_DAYS)
         try:
             contracts = await self.client.async_get_contracts()
             snapshots: dict[str, ContractSnapshot] = {}
@@ -190,14 +192,13 @@ class EmmasaDataUpdateCoordinator(DataUpdateCoordinator[EmmasaCoordinatorData]):
                 stat_id = statistic_id_for_contract(contract)
                 last_start_utc, last_sum = await self._async_get_last_statistic(stat_id)
                 if last_start_utc is None:
-                    since_utc = (now_utc - timedelta(days=self._backfill_days)).replace(
-                        minute=0, second=0, microsecond=0
-                    )
+                    since_utc = current_hour_utc - timedelta(days=self._backfill_days)
                 else:
-                    min_window = (now_utc - timedelta(hours=_MIN_HOURLY_LOOKBACK_HOURS)).replace(
-                        minute=0, second=0, microsecond=0
+                    min_window = current_hour_utc - timedelta(hours=_MIN_HOURLY_LOOKBACK_HOURS)
+                    since_utc = max(
+                        min(last_start_utc + timedelta(hours=1), min_window),
+                        max_lookback_utc,
                     )
-                    since_utc = min(last_start_utc + timedelta(hours=1), min_window)
 
                 snapshot = await self.client.async_fetch_contract_snapshot(
                     contract,
@@ -209,11 +210,10 @@ class EmmasaDataUpdateCoordinator(DataUpdateCoordinator[EmmasaCoordinatorData]):
                     snapshot,
                     last_start_utc,
                     last_sum,
+                    current_hour_utc,
                 )
 
-            active_ids = set(snapshots)
-            self._remove_stale_devices(active_ids)
-            self._known_contract_ids = active_ids
+            self._remove_stale_devices(set(snapshots))
 
             return EmmasaCoordinatorData(
                 contracts=snapshots,
