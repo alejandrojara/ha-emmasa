@@ -23,7 +23,7 @@ Integración personalizada para **Home Assistant** (compatible con **Home Assist
 - **Precisión horaria real en el Panel de Energía de Home Assistant:**
   EMMASA publica las lecturas horarias de telelectura (`vol_h`) en lotes diferidos (habitualmente con 9–24 h de retardo). En lugar de generar picos artificiales en la hora del sondeo, esta integración importa únicamente **horas UTC cerradas** en su marca de tiempo real mediante la API oficial de estadísticas externas del Recorder (`async_add_external_statistics` con `StatisticMeanType.NONE`, `unit_class="volume"` y `UnitOfVolume.CUBIC_METERS`).
 - **Backfill automático e incremental:** importa hasta 30 días (configurable entre 7 y 365 días) en la primera sincronización y añade únicamente las horas nuevas en sondeos posteriores sin duplicados ni saltos negativos.
-- **Un dispositivo por contrato de suministro:** soporta cuentas con múltiples contratos, detección dinámica de nuevos contratos y limpieza automática de dispositivos obsoletos.
+- **Selección de suministro en cuentas multi-contrato:** si tu cuenta tiene un único contrato se configura automáticamente; si dispone de **más de un suministro**, tras autenticarte se listan todos tus contratos para elegir cuál supervisar (y puedes repetir el asistente para añadir suministros adicionales de forma independiente).
 - **Autenticación 100% HTTP asíncrona (`aiohttp`):** OAuth2 + PKCE (`S256`) sin navegador *headless*, sesión HTTP compartida (`async_get_clientsession`), rotación atómica de `refresh_token` protegida contra condiciones de carrera y flujos nativos de **reautenticación** y **reconfiguración** desde la UI.
 - **Primera instalación sin reinicio en Home Assistant 2026.11+:** al incluir `config_flow: true`, iconos de marca locales (`brand/icon.png`) y cero dependencias PyPI externas (`requirements: []`), el **Home Assistant Marketplace** carga la integración de inmediato y abre el asistente de configuración sin reiniciar.
 - **Privacidad y Diagnóstico:** descarga de diagnóstico integrada con redacción automática (`async_redact_data`) de credenciales, tokens, correos e identificadores personales o de contrato.
@@ -46,7 +46,8 @@ Desde **Home Assistant 2026.11**, HACS ha sido sustituido por el **Home Assistan
 2. Pulsa **Instalar**.
 3. Al tratarse de una integración con asistente UI y sin dependencias externas, **no hace falta reiniciar Home Assistant** en la primera instalación: se abrirá directamente el flujo de configuración de **EMMASA (Portal Ciudadano)** (o puedes abrirlo con el botón **Añadir integración** arriba / en **Ajustes → Dispositivos y servicios → Añadir integración**).
 4. Introduce tu **Usuario (DNI / NIF)** y **Contraseña** de la Oficina Virtual de EMMASA.
-5. Las futuras actualizaciones aparecerán automáticamente en **Ajustes → Actualizaciones** (al actualizar una integración ya cargada, Home Assistant mostrará una reparación para reiniciar).
+5. Si tu cuenta tiene **más de un suministro**, selecciona en el desplegable el contrato que quieres integrar (puedes repetir el paso 3 para añadir otros contratos de la misma cuenta).
+6. Las futuras actualizaciones aparecerán automáticamente en **Ajustes → Actualizaciones** (al actualizar una integración ya cargada, Home Assistant mostrará una reparación para reiniciar).
 
 ### Opción 2: HACS clásico (Home Assistant 2026.10)
 
@@ -90,8 +91,8 @@ Para visualizar gráficas horarias exactas sin desplazamientos causados por el r
 | **Última telelectura** | `sensor` | `timestamp` | — | Diagnóstico | Fecha/hora UTC del último dato recibido |
 | **Retardo de telelectura** | `sensor` | `duration` | `h` | Diagnóstico *(deshab. por defecto)* | Horas transcurridas desde la última lectura publicada |
 | **Telelectura disponible** | `binary_sensor` | `connectivity` | — | Diagnóstico | Indica si el contador dispone de telelectura activa |
-| **Umbral alerta diurna / nocturna** | `sensor` | `volume` | `L` | Diagnóstico *(deshab. por defecto)* | Umbrales configurados en EMMASA (solo lectura en v0.1.0) |
-| **Alerta diurna / nocturna activa** | `binary_sensor` | — | — | Diagnóstico *(deshab. por defecto)* | Estado de las alertas en EMMASA (solo lectura en v0.1.0) |
+| **Umbral alerta diurna / nocturna** | `sensor` | `volume` | `L` | Diagnóstico *(deshab. por defecto)* | Umbrales configurados en EMMASA (solo lectura) |
+| **Alerta diurna / nocturna activa** | `binary_sensor` | — | — | Diagnóstico *(deshab. por defecto)* | Estado de las alertas en EMMASA (solo lectura) |
 
 ---
 

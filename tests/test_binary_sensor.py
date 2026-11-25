@@ -20,7 +20,7 @@ from .conftest import MOCK_CONTRACT_UUID
 async def test_binary_sensors_setup_and_states(
     recorder_mock: Recorder,
     hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
+    mock_legacy_config_entry: MockConfigEntry,
     mock_emmasa_client: MagicMock,
     sample_contract: ContractInfo,
     sample_contract_2: ContractInfo,
@@ -28,8 +28,8 @@ async def test_binary_sensors_setup_and_states(
     mock_recorder_stats: dict[str, Any],
 ) -> None:
     """Verify telelectura connectivity and alert binary sensors (including dynamic contracts)."""
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    mock_legacy_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_legacy_config_entry.entry_id)
     await hass.async_block_till_done()
 
     ent_reg = er.async_get(hass)
@@ -47,7 +47,7 @@ async def test_binary_sensors_setup_and_states(
         assert entry.entity_category == EntityCategory.DIAGNOSTIC
         ent_reg.async_update_entity(entity_id, disabled_by=None)
 
-    await hass.config_entries.async_reload(mock_config_entry.entry_id)
+    await hass.config_entries.async_reload(mock_legacy_config_entry.entry_id)
     await hass.async_block_till_done()
 
     day_alert = hass.states.get("binary_sensor.emmasa_contrato_12345_daytime_alert_enabled")
@@ -72,7 +72,7 @@ async def test_binary_sensors_setup_and_states(
     )
     mock_emmasa_client.async_get_contracts.return_value = [sample_contract, sample_contract_2]
     mock_emmasa_client.async_fetch_contract_snapshot.side_effect = [sample_snapshot, snapshot_2]
-    await mock_config_entry.runtime_data.coordinator.async_refresh()
+    await mock_legacy_config_entry.runtime_data.coordinator.async_refresh()
     await hass.async_block_till_done()
 
     tele_2 = hass.states.get("binary_sensor.emmasa_contrato_67890_telelectura_available")

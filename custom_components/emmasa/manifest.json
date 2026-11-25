@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/alejandrojara/ha-emmasa/issues",
   "loggers": ["custom_components.emmasa"],
   "requirements": [],
-  "version": "0.1.0"
+  "version": "20261125"
 }

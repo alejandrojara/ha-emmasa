@@ -128,7 +128,7 @@ async def test_sensors_setup_states_attributes_and_device_info(
 async def test_dynamic_contract_addition_creates_sensors(
     recorder_mock: Recorder,
     hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
+    mock_legacy_config_entry: MockConfigEntry,
     mock_emmasa_client: MagicMock,
     sample_contract: ContractInfo,
     sample_contract_2: ContractInfo,
@@ -136,8 +136,8 @@ async def test_dynamic_contract_addition_creates_sensors(
     mock_recorder_stats: dict[str, Any],
 ) -> None:
     """New contracts appearing in later coordinator updates dynamically add sensor entities."""
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    mock_legacy_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_legacy_config_entry.entry_id)
     await hass.async_block_till_done()
 
     snapshot_2 = ContractSnapshot(
@@ -154,7 +154,7 @@ async def test_dynamic_contract_addition_creates_sensors(
     mock_emmasa_client.async_get_contracts.return_value = [sample_contract, sample_contract_2]
     mock_emmasa_client.async_fetch_contract_snapshot.side_effect = [sample_snapshot, snapshot_2]
 
-    await mock_config_entry.runtime_data.coordinator.async_refresh()
+    await mock_legacy_config_entry.runtime_data.coordinator.async_refresh()
     await hass.async_block_till_done()
 
     assert hass.states.get("sensor.emmasa_contrato_67890_meter_reading") is not None

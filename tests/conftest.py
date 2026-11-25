@@ -30,6 +30,8 @@ from custom_components.emmasa.api import (
 from custom_components.emmasa.const import (
     ALERT_DAYTIME_ID,
     ALERT_NIGHTTIME_ID,
+    CONF_CONTRACT_ID,
+    CONF_CONTRACT_NAME,
     CONF_REFRESH_TOKEN,
     DEFAULT_GRAFANA_DATASOURCE_UID,
     DOMAIN,
@@ -58,11 +60,27 @@ def make_test_jwt(exp: float | None = None) -> str:
     return f"{header_b64}.{payload_b64}.signature"
 
 
+@pytest.fixture
+def mock_config_entry() -> MockConfigEntry:
+    """Return a mock per-contract EMMASA ConfigEntry."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title=f"EMMASA ({MOCK_CONTRACT_NAME})",
+        unique_id=MOCK_CONTRACT_UUID,
+        data={
+            CONF_USERNAME: MOCK_USERNAME,
+            CONF_PASSWORD: MOCK_PASSWORD,
+            CONF_CONTRACT_ID: MOCK_CONTRACT_UUID,
+            CONF_CONTRACT_NAME: MOCK_CONTRACT_NAME,
+            CONF_REFRESH_TOKEN: "initial-refresh-token",
+        },
+        options={},
+    )
 
 
 @pytest.fixture
-def mock_config_entry() -> MockConfigEntry:
-    """Return a mock EMMASA ConfigEntry."""
+def mock_legacy_config_entry() -> MockConfigEntry:
+    """Return a legacy account-scoped ConfigEntry without CONF_CONTRACT_ID."""
     return MockConfigEntry(
         domain=DOMAIN,
         title=f"EMMASA ({MOCK_USERNAME})",

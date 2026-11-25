@@ -47,6 +47,8 @@ async def test_diagnostics_redacts_all_pii_and_secrets(
 
     assert diag["entry"]["data"]["username"] == REDACTED
     assert diag["entry"]["data"]["password"] == REDACTED
+    assert diag["entry"]["data"]["contract_id"] == REDACTED
+    assert diag["entry"]["data"]["contract_name"] == REDACTED
     assert diag["entry"]["data"]["refresh_token"] == REDACTED
     assert diag["coordinator"]["contracts_count"] == 1
     assert diag["coordinator"]["contracts"][0]["contract_id"] == REDACTED

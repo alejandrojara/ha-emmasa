@@ -125,8 +125,7 @@ async def test_coordinator_real_recorder_external_statistics_e2e(
     assert last_stats[stat_id][0]["state"] == pytest.approx(0.007)
 
 
-async def test_coordinator_removes_stale_devices(
-    recorder_mock: Recorder,
+async def test_coordinator_filters_selected_contract_and_handles_missing(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_emmasa_client: MagicMock,
@@ -135,13 +134,39 @@ async def test_coordinator_removes_stale_devices(
     sample_snapshot: ContractSnapshot,
     mock_recorder_stats: dict[str, Any],
 ) -> None:
-    """Stale devices persisted across restarts and contracts removed later are both cleaned up."""
+    """Coordinator polls only the configured CONF_CONTRACT_ID and raises UpdateFailed if missing."""
     mock_config_entry.add_to_hass(hass)
+    mock_emmasa_client.async_get_contracts.return_value = [sample_contract, sample_contract_2]
+    coordinator = EmmasaDataUpdateCoordinator(hass, mock_config_entry, mock_emmasa_client)
+
+    data = await coordinator._async_update_data()
+    assert list(data.contracts.keys()) == [sample_contract.contract_id]
+    assert mock_emmasa_client.async_fetch_contract_snapshot.await_count == 1
+    assert mock_emmasa_client.async_fetch_contract_snapshot.await_args.args[0] == sample_contract
+
+    # Configured contract no longer returned by EMMASA -> UpdateFailed
+    mock_emmasa_client.async_get_contracts.return_value = [sample_contract_2]
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+async def test_coordinator_removes_stale_devices(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_legacy_config_entry: MockConfigEntry,
+    mock_emmasa_client: MagicMock,
+    sample_contract: ContractInfo,
+    sample_contract_2: ContractInfo,
+    sample_snapshot: ContractSnapshot,
+    mock_recorder_stats: dict[str, Any],
+) -> None:
+    """Stale devices persisted across restarts and contracts removed later are both cleaned up."""
+    mock_legacy_config_entry.add_to_hass(hass)
     dev_reg = dr.async_get(hass)
     # Pre-register a stale device from a previous HA run
     stale_pre_id = "99999999-8888-4777-8666-555555555555"
     dev_reg.async_get_or_create(
-        config_entry_id=mock_config_entry.entry_id,
+        config_entry_id=mock_legacy_config_entry.entry_id,
         identifiers={(DOMAIN, stale_pre_id)},
         name="EMMASA Contrato Old",
     )
@@ -160,21 +185,21 @@ async def test_coordinator_removes_stale_devices(
     mock_emmasa_client.async_get_contracts.return_value = [sample_contract, sample_contract_2]
     mock_emmasa_client.async_fetch_contract_snapshot.side_effect = [sample_snapshot, snapshot_2]
 
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    assert await hass.config_entries.async_setup(mock_legacy_config_entry.entry_id)
     await hass.async_block_till_done()
 
     # Pre-existing stale device was removed on startup refresh
     assert (
         dev_reg.async_get_device_by_identifier(
             (DOMAIN, stale_pre_id),
-            mock_config_entry.entry_id,
+            mock_legacy_config_entry.entry_id,
         )
         is None
     )
     assert (
         dev_reg.async_get_device_by_identifier(
             (DOMAIN, sample_contract_2.contract_id),
-            mock_config_entry.entry_id,
+            mock_legacy_config_entry.entry_id,
         )
         is not None
     )
@@ -184,13 +209,13 @@ async def test_coordinator_removes_stale_devices(
     mock_emmasa_client.async_fetch_contract_snapshot.side_effect = None
     mock_emmasa_client.async_fetch_contract_snapshot.return_value = sample_snapshot
 
-    await mock_config_entry.runtime_data.coordinator.async_refresh()
+    await mock_legacy_config_entry.runtime_data.coordinator.async_refresh()
     await hass.async_block_till_done()
 
     assert (
         dev_reg.async_get_device_by_identifier(
             (DOMAIN, sample_contract_2.contract_id),
-            mock_config_entry.entry_id,
+            mock_legacy_config_entry.entry_id,
         )
         is None
     )

@@ -31,6 +31,8 @@ __all__ = [
     "ALERT_NIGHTTIME_ID",
     "API_VERSION",
     "CONF_BACKFILL_DAYS",
+    "CONF_CONTRACT_ID",
+    "CONF_CONTRACT_NAME",
     "CONF_REFRESH_TOKEN",
     "CONF_SCAN_INTERVAL_HOURS",
     "DEFAULT_BACKFILL_DAYS",
@@ -58,6 +60,8 @@ __all__ = [
 ]
 
 # Config & options keys
+CONF_CONTRACT_ID: Final = "contract_id"
+CONF_CONTRACT_NAME: Final = "contract_name"
 CONF_REFRESH_TOKEN: Final = "refresh_token"
 CONF_BACKFILL_DAYS: Final = "backfill_days"
 CONF_SCAN_INTERVAL_HOURS: Final = "scan_interval_hours"
@@ -87,6 +91,7 @@ TO_REDACT: Final = {
     "id_token",
     "grafana_session",
     "contract_id",
+    "contract_name",
     "id",
     "name",
     "serial_number",

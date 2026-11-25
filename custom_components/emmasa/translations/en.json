@@ -9,6 +9,13 @@
           "password": "Password"
         }
       },
+      "select_contract": {
+        "title": "Select water supply contract",
+        "description": "Your EMMASA account has {count} water supply contracts. Select the contract you want to monitor in this Home Assistant entry. You can repeat setup later to add additional supplies.",
+        "data": {
+          "contract_id": "Supply contract"
+        }
+      },
       "reauth_confirm": {
         "title": "Reauthenticate EMMASA",
         "description": "Your EMMASA session for account {username} has expired or was rejected. Please enter your password again.",
@@ -27,17 +34,19 @@
     },
     "error": {
       "cannot_connect": "Unable to connect to EMMASA servers. Please try again later.",
+      "contract_not_found": "The configured water supply contract is no longer associated with this EMMASA account.",
       "invalid_auth": "Invalid username or password.",
+      "invalid_contract": "The selected water supply contract is not valid.",
       "mfa_required": "This EMMASA account requires SMS multi-factor authentication, which is not currently supported.",
       "password_change_required": "EMMASA requires a password change in the Oficina Virtual web portal before signing in.",
       "no_contracts": "No water supply contracts were found for this EMMASA account.",
       "unknown": "Unexpected error occurred."
     },
     "abort": {
-      "already_configured": "This EMMASA account is already configured.",
+      "already_configured": "This EMMASA water supply contract is already configured.",
       "reauth_successful": "Reauthentication with EMMASA succeeded.",
       "reconfigure_successful": "EMMASA credentials updated successfully.",
-      "unique_id_mismatch": "The new credentials belong to a different EMMASA account than the one being reconfigured."
+      "unique_id_mismatch": "The new credentials do not match the configured EMMASA water supply contract."
     }
   },
   "options": {
@@ -100,6 +109,9 @@
     },
     "cannot_connect": {
       "message": "Unable to reach EMMASA servers during setup."
+    },
+    "contract_not_found": {
+      "message": "The configured EMMASA water supply contract was not found in this account."
     },
     "update_failed": {
       "message": "Error updating EMMASA water consumption data: {error}"

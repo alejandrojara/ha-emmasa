@@ -37,6 +37,7 @@ from .api import (
 )
 from .const import (
     CONF_BACKFILL_DAYS,
+    CONF_CONTRACT_ID,
     CONF_SCAN_INTERVAL_HOURS,
     DEFAULT_BACKFILL_DAYS,
     DEFAULT_SCAN_INTERVAL_HOURS,
@@ -89,6 +90,10 @@ class EmmasaDataUpdateCoordinator(DataUpdateCoordinator[EmmasaCoordinatorData]):
         self.client = client
         self._backfill_days = int(
             config_entry.options.get(CONF_BACKFILL_DAYS, DEFAULT_BACKFILL_DAYS)
+        )
+        raw_contract_id = config_entry.data.get(CONF_CONTRACT_ID)
+        self._selected_contract_id: str | None = (
+            str(raw_contract_id) if raw_contract_id else None
         )
 
     async def _async_get_last_statistic(
@@ -185,6 +190,18 @@ class EmmasaDataUpdateCoordinator(DataUpdateCoordinator[EmmasaCoordinatorData]):
         max_lookback_utc = current_hour_utc - timedelta(days=MAX_BACKFILL_DAYS)
         try:
             contracts = await self.client.async_get_contracts()
+            if self._selected_contract_id is not None:
+                contracts = [
+                    contract
+                    for contract in contracts
+                    if contract.contract_id == self._selected_contract_id
+                ]
+                if not contracts:
+                    raise UpdateFailed(
+                        translation_domain=DOMAIN,
+                        translation_key="contract_not_found",
+                    )
+
             snapshots: dict[str, ContractSnapshot] = {}
             imported_counts: dict[str, int] = {}
 

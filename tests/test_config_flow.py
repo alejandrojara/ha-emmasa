@@ -1,4 +1,4 @@
-"""Tests for EMMASA config, reauth, reconfigure, and options flows."""
+"""Tests for EMMASA config, multi-supply selection, reauth, reconfigure, and options flows."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.emmasa.api import (
+    ContractInfo,
     EmmasaAuthError,
     EmmasaConnectionError,
     EmmasaMfaRequiredError,
@@ -21,20 +22,29 @@ from custom_components.emmasa.api import (
 )
 from custom_components.emmasa.const import (
     CONF_BACKFILL_DAYS,
+    CONF_CONTRACT_ID,
+    CONF_CONTRACT_NAME,
     CONF_REFRESH_TOKEN,
     CONF_SCAN_INTERVAL_HOURS,
     DOMAIN,
 )
 
-from .conftest import MOCK_PASSWORD, MOCK_USERNAME
+from .conftest import (
+    MOCK_CONTRACT_NAME,
+    MOCK_CONTRACT_NAME_2,
+    MOCK_CONTRACT_UUID,
+    MOCK_CONTRACT_UUID_2,
+    MOCK_PASSWORD,
+    MOCK_USERNAME,
+)
 
 
-async def test_user_flow_success(
+async def test_user_flow_single_contract_auto_selects(
     recorder_mock: Recorder,
     hass: HomeAssistant,
     mock_emmasa_client: MagicMock,
 ) -> None:
-    """Test successful initial user setup with DNI normalization and unique_id."""
+    """Single-contract account creates entry directly without an extra selection step."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_USER},
@@ -50,20 +60,81 @@ async def test_user_flow_success(
         await hass.async_block_till_done()
 
     assert result2["type"] is FlowResultType.CREATE_ENTRY
-    assert result2["title"] == f"EMMASA ({MOCK_USERNAME})"
+    assert result2["title"] == f"EMMASA ({MOCK_CONTRACT_NAME})"
     assert result2["data"][CONF_USERNAME] == MOCK_USERNAME
     assert result2["data"][CONF_PASSWORD] == MOCK_PASSWORD
+    assert result2["data"][CONF_CONTRACT_ID] == MOCK_CONTRACT_UUID
+    assert result2["data"][CONF_CONTRACT_NAME] == MOCK_CONTRACT_NAME
     assert result2["data"][CONF_REFRESH_TOKEN] == "rotated-refresh-token"
     assert len(mock_setup.mock_calls) == 1
 
 
-async def test_user_flow_duplicate_abort(
+async def test_user_flow_multiple_contracts_prompts_selection_and_allows_second_entry(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_emmasa_client: MagicMock,
+    sample_contract: ContractInfo,
+    sample_contract_2: ContractInfo,
+) -> None:
+    """Multi-supply account lists all contracts so user can pick one (and add another later)."""
+    # First supply is already configured
+    mock_config_entry.add_to_hass(hass)
+    mock_emmasa_client.async_get_contracts.return_value = [sample_contract, sample_contract_2]
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_USER},
+    )
+    result_select = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_USERNAME: MOCK_USERNAME, CONF_PASSWORD: MOCK_PASSWORD},
+    )
+    assert result_select["type"] is FlowResultType.FORM
+    assert result_select["step_id"] == "select_contract"
+    assert result_select["description_placeholders"] == {"count": "2"}
+
+    # Selecting the second (not yet configured) contract succeeds
+    with patch("custom_components.emmasa.async_setup_entry", return_value=True) as mock_setup:
+        result_created = await hass.config_entries.flow.async_configure(
+            result_select["flow_id"],
+            {CONF_CONTRACT_ID: MOCK_CONTRACT_UUID_2},
+        )
+        await hass.async_block_till_done()
+
+    assert result_created["type"] is FlowResultType.CREATE_ENTRY
+    assert result_created["title"] == f"EMMASA ({MOCK_CONTRACT_NAME_2})"
+    assert result_created["data"][CONF_CONTRACT_ID] == MOCK_CONTRACT_UUID_2
+    assert result_created["data"][CONF_CONTRACT_NAME] == MOCK_CONTRACT_NAME_2
+    assert any(
+        call.args[1].unique_id == MOCK_CONTRACT_UUID_2 for call in mock_setup.mock_calls
+    )
+
+    # Re-selecting an already configured contract aborts cleanly with already_configured
+    result_dup = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_USER},
+    )
+    result_dup_select = await hass.config_entries.flow.async_configure(
+        result_dup["flow_id"],
+        {CONF_USERNAME: MOCK_USERNAME, CONF_PASSWORD: MOCK_PASSWORD},
+    )
+    assert result_dup_select["step_id"] == "select_contract"
+    result_dup_abort = await hass.config_entries.flow.async_configure(
+        result_dup_select["flow_id"],
+        {CONF_CONTRACT_ID: MOCK_CONTRACT_UUID},
+    )
+    assert result_dup_abort["type"] is FlowResultType.ABORT
+    assert result_dup_abort["reason"] == "already_configured"
+
+
+async def test_user_flow_duplicate_single_contract_abort(
     recorder_mock: Recorder,
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_emmasa_client: MagicMock,
 ) -> None:
-    """Duplicate account aborts with already_configured."""
+    """Duplicate single-contract account aborts with already_configured."""
     mock_config_entry.add_to_hass(hass)
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -117,23 +188,30 @@ async def test_user_flow_errors_and_recovery(
     assert result3["type"] is FlowResultType.CREATE_ENTRY
 
 
-async def test_user_flow_no_contracts(
+async def test_user_flow_empty_username_and_no_contracts(
     recorder_mock: Recorder,
     hass: HomeAssistant,
     mock_emmasa_client: MagicMock,
 ) -> None:
-    """Account with zero contracts shows no_contracts error."""
-    mock_emmasa_client.async_get_contracts.return_value = []
+    """Whitespace username triggers invalid_auth; zero contracts shows no_contracts."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_USER},
     )
-    result2 = await hass.config_entries.flow.async_configure(
+    empty_res = await hass.config_entries.flow.async_configure(
         result["flow_id"],
+        {CONF_USERNAME: "   ", CONF_PASSWORD: MOCK_PASSWORD},
+    )
+    assert empty_res["type"] is FlowResultType.FORM
+    assert empty_res["errors"] == {"base": "invalid_auth"}
+
+    mock_emmasa_client.async_get_contracts.return_value = []
+    no_c = await hass.config_entries.flow.async_configure(
+        empty_res["flow_id"],
         {CONF_USERNAME: MOCK_USERNAME, CONF_PASSWORD: MOCK_PASSWORD},
     )
-    assert result2["type"] is FlowResultType.FORM
-    assert result2["errors"] == {"base": "no_contracts"}
+    assert no_c["type"] is FlowResultType.FORM
+    assert no_c["errors"] == {"base": "no_contracts"}
 
 
 async def test_reauth_flow_success_and_errors(
@@ -141,8 +219,10 @@ async def test_reauth_flow_success_and_errors(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_emmasa_client: MagicMock,
+    sample_contract: ContractInfo,
+    sample_contract_2: ContractInfo,
 ) -> None:
-    """Test reauthentication flow error handling and credential update."""
+    """Test reauthentication flow error handling, missing contract guard, and credential update."""
     mock_config_entry.add_to_hass(hass)
 
     result = await mock_config_entry.start_reauth_flow(hass)
@@ -164,7 +244,18 @@ async def test_reauth_flow_success_and_errors(
         assert err_res["type"] is FlowResultType.FORM
         assert err_res["errors"] == {"base": err_key}
 
+    # Contract no longer in account shows contract_not_found
     mock_emmasa_client.async_authenticate.side_effect = None
+    mock_emmasa_client.async_get_contracts.return_value = [sample_contract_2]
+    missing_res = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_PASSWORD: "new-password"},
+    )
+    assert missing_res["type"] is FlowResultType.FORM
+    assert missing_res["errors"] == {"base": "contract_not_found"}
+
+    # Recovery preserves CONF_CONTRACT_ID / CONF_CONTRACT_NAME and clears stale refresh_token
+    mock_emmasa_client.async_get_contracts.return_value = [sample_contract]
     mock_emmasa_client.async_authenticate.return_value = type(
         mock_emmasa_client.token_bundle
     )(access_token="fresh-jwt", refresh_token=None, expires_at=9999999999.0)
@@ -178,6 +269,8 @@ async def test_reauth_flow_success_and_errors(
     assert ok_res["type"] is FlowResultType.ABORT
     assert ok_res["reason"] == "reauth_successful"
     assert mock_config_entry.data[CONF_PASSWORD] == "new-password"
+    assert mock_config_entry.data[CONF_CONTRACT_ID] == MOCK_CONTRACT_UUID
+    assert mock_config_entry.data[CONF_CONTRACT_NAME] == MOCK_CONTRACT_NAME
     assert CONF_REFRESH_TOKEN not in mock_config_entry.data
 
 
@@ -186,8 +279,10 @@ async def test_reconfigure_flow_success_errors_and_mismatch(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_emmasa_client: MagicMock,
+    sample_contract: ContractInfo,
+    sample_contract_2: ContractInfo,
 ) -> None:
-    """Test reconfigure flow updates credentials, validates errors, and guards unique_id."""
+    """Test reconfigure flow updates credentials, validates errors, and guards contract ownership."""
     mock_config_entry.add_to_hass(hass)
 
     result = await mock_config_entry.start_reconfigure_flow(hass)
@@ -219,8 +314,8 @@ async def test_reconfigure_flow_success_errors_and_mismatch(
     assert no_c["type"] is FlowResultType.FORM
     assert no_c["errors"] == {"base": "no_contracts"}
 
-    # Success
-    mock_emmasa_client.async_get_contracts.return_value = [MagicMock()]
+    # Success when configured contract is owned by authenticated account
+    mock_emmasa_client.async_get_contracts.return_value = [sample_contract, sample_contract_2]
     with patch("custom_components.emmasa.async_setup_entry", return_value=True):
         ok_res = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -231,11 +326,13 @@ async def test_reconfigure_flow_success_errors_and_mismatch(
     assert ok_res["type"] is FlowResultType.ABORT
     assert ok_res["reason"] == "reconfigure_successful"
     assert mock_config_entry.data[CONF_PASSWORD] == "updated-password"
+    assert mock_config_entry.data[CONF_CONTRACT_ID] == MOCK_CONTRACT_UUID
 
-    # Mismatched account aborts cleanly
+    # Account that does not own the configured contract aborts cleanly
     mock_emmasa_client.async_get_profile = AsyncMock(
         return_value=UserProfile(username="Other", login="99999999A")
     )
+    mock_emmasa_client.async_get_contracts.return_value = [sample_contract_2]
     res_mismatch = await mock_config_entry.start_reconfigure_flow(hass)
     res_abort = await hass.config_entries.flow.async_configure(
         res_mismatch["flow_id"],
@@ -243,6 +340,25 @@ async def test_reconfigure_flow_success_errors_and_mismatch(
     )
     assert res_abort["type"] is FlowResultType.ABORT
     assert res_abort["reason"] == "unique_id_mismatch"
+
+
+async def test_reconfigure_legacy_entry_without_contract_id(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_legacy_config_entry: MockConfigEntry,
+    mock_emmasa_client: MagicMock,
+) -> None:
+    """Legacy entry without CONF_CONTRACT_ID still guards username unique_id on reconfigure."""
+    mock_legacy_config_entry.add_to_hass(hass)
+    result = await mock_legacy_config_entry.start_reconfigure_flow(hass)
+    with patch("custom_components.emmasa.async_setup_entry", return_value=True):
+        ok_res = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_USERNAME: MOCK_USERNAME, CONF_PASSWORD: "legacy-new-password"},
+        )
+        await hass.async_block_till_done()
+    assert ok_res["type"] is FlowResultType.ABORT
+    assert ok_res["reason"] == "reconfigure_successful"
 
 
 async def test_options_flow(

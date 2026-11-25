@@ -9,6 +9,13 @@
           "password": "Contraseña"
         }
       },
+      "select_contract": {
+        "title": "Seleccionar contrato de suministro",
+        "description": "Tu cuenta de EMMASA tiene {count} contratos de suministro de agua. Selecciona el contrato que deseas supervisar en esta entrada de Home Assistant. Podrás repetir la configuración más adelante para añadir otros suministros.",
+        "data": {
+          "contract_id": "Contrato de suministro"
+        }
+      },
       "reauth_confirm": {
         "title": "Reautenticar EMMASA",
         "description": "Tu sesión de EMMASA para la cuenta {username} ha caducado o fue rechazada. Introduce de nuevo tu contraseña.",
@@ -27,17 +34,19 @@
     },
     "error": {
       "cannot_connect": "No se pudo conectar con los servidores de EMMASA. Inténtalo de nuevo más tarde.",
+      "contract_not_found": "El contrato de suministro configurado ya no aparece asociado a esta cuenta de EMMASA.",
       "invalid_auth": "Usuario o contraseña incorrectos.",
+      "invalid_contract": "El contrato de suministro seleccionado no es válido.",
       "mfa_required": "Esta cuenta de EMMASA requiere verificación multifactor por SMS, que actualmente no está soportada.",
       "password_change_required": "EMMASA solicita cambiar la contraseña en la Oficina Virtual web antes de iniciar sesión.",
       "no_contracts": "No se encontraron contratos de suministro de agua asociados a esta cuenta.",
       "unknown": "Se produjo un error inesperado."
     },
     "abort": {
-      "already_configured": "Esta cuenta de EMMASA ya está configurada.",
+      "already_configured": "Este contrato de suministro de EMMASA ya está configurado.",
       "reauth_successful": "Reautenticación con EMMASA completada correctamente.",
       "reconfigure_successful": "Credenciales de EMMASA actualizadas correctamente.",
-      "unique_id_mismatch": "Las nuevas credenciales pertenecen a una cuenta de EMMASA distinta a la configurada."
+      "unique_id_mismatch": "Las nuevas credenciales no corresponden al contrato de suministro de EMMASA configurado."
     }
   },
   "options": {
@@ -100,6 +109,9 @@
     },
     "cannot_connect": {
       "message": "No se pudo contactar con los servidores de EMMASA durante el inicio."
+    },
+    "contract_not_found": {
+      "message": "El contrato de suministro de EMMASA configurado no se encontró en esta cuenta."
     },
     "update_failed": {
       "message": "Error al actualizar los datos de consumo de agua de EMMASA: {error}"

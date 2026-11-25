@@ -1,6 +1,6 @@
 [project]
 name = "ha-emmasa"
-version = "0.1.0"
+version = "20261125"
 description = "Home Assistant custom integration for EMMASA Portal Ciudadano (Elliot Cloud)"
 readme = "README.md"
 requires-python = ">=3.12"
