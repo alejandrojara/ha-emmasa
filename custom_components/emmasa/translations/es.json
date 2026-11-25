@@ -53,10 +53,10 @@
     "step": {
       "init": {
         "title": "Opciones de sondeo e historial de EMMASA",
-        "description": "Ajusta la frecuencia con la que Home Assistant consulta EMMASA y los días de historial horario a importar inicialmente.",
+        "description": "Ajusta la frecuencia con la que Home Assistant consulta EMMASA y los días de historial horario a importar (si aumentas este valor, se importará automáticamente el histórico anterior disponible).",
         "data": {
           "scan_interval_hours": "Intervalo de sondeo (horas)",
-          "backfill_days": "Historial horario inicial (días)"
+          "backfill_days": "Historial horario a importar (días)"
         }
       }
     }

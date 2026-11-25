@@ -9,7 +9,7 @@
 >
 > - **Sin afiliación ni soporte oficial:** Este proyecto es un **complemento comunitario independiente y NO oficial**. No está desarrollado, avalado, auditado ni soportado por **EMMASA (Empresa Mixta de Aguas de Santa Cruz de Tenerife, S.A.)**, **Grupo Sacyr / Acuama**, **Elliot Cloud**, ni por el proyecto **Home Assistant / Open Home Foundation**. Todas las marcas mencionadas pertenecen a sus respectivos propietarios y se citan exclusivamente con fines descriptivos de interoperabilidad.
 > - **API privada no documentada:** Esta integración interactúa con los endpoints internos del Portal Ciudadano de EMMASA utilizando las credenciales propias del usuario titular del contrato. Al no existir una API pública oficial, cualquier cambio en el portal web, en el flujo OAuth2/SSO, la activación de MFA por SMS (`loginA2P`) o cambios en los dashboards embebidos puede provocar fallos temporales o permanentes sin previo aviso.
-> - **Uso estrictamente personal, responsable y de solo lectura:** El cliente accede únicamente en **modo solo lectura** a los contratos del titular autenticado con un intervalo de sondeo respetuoso (por defecto cada **2 horas** en una sola petición *batch*). Es responsabilidad del usuario verificar que su uso cumple los términos de servicio de su contrato y del portal de EMMASA.
+> - **Uso estrictamente personal, responsable y de solo lectura:** El cliente accede únicamente en **modo solo lectura** a los contratos del titular autenticado con un intervalo de sondeo respetuoso (por defecto cada **8 horas** en una sola petición *batch*). Es responsabilidad del usuario verificar que su uso cumple los términos de servicio de su contrato y del portal de EMMASA.
 > - **Seguridad, privacidad y exención de responsabilidad:** Como ocurre con cualquier integración comunitaria instalada desde el **Home Assistant Marketplace**, este código se ejecuta dentro de tu instancia local de Home Assistant. Tus credenciales y tokens se guardan localmente en el almacenamiento seguro de Home Assistant (`.storage`) y solo se comunican directamente con los servidores oficiales de EMMASA / Sacyr Acuama, nunca con terceros. El software se distribuye bajo licencia **MIT «TAL CUAL» (*AS IS*)**, sin garantía de ningún tipo; los valores mostrados tienen carácter informativo y **no sustituyen ni tienen validez legal o de facturación** frente a las lecturas y facturas oficiales de EMMASA.
 
 ---
@@ -102,8 +102,8 @@ Desde **Ajustes → Dispositivos y servicios → EMMASA (Portal Ciudadano) → C
 
 | Parámetro | Por defecto | Rango | Descripción |
 | :--- | :---: | :---: | :--- |
-| **Intervalo de sondeo (horas)** | `2` | `1–6` | Frecuencia de consulta a EMMASA (una sola petición batch por contrato). Se recomienda mantener `>= 2 h` para un uso respetuoso del portal. |
-| **Historial horario inicial (días)** | `30` | `7–365` | Días de historial horario que se importan en la primera sincronización cuando todavía no existen estadísticas previas en el Recorder. |
+| **Intervalo de sondeo (horas)** | `8` | `1–24` | Frecuencia de consulta a EMMASA (una sola petición batch por contrato). Acorde al ritmo de publicación diferida de la telelectura (habitualmente 1–2 volcados al día). |
+| **Historial horario a importar (días)** | `30` | `7–365` | Días de historial horario a importar en el Recorder. Si aumentas este valor posteriormente, la integración importa automáticamente el histórico anterior disponible en EMMASA desplazando las sumas acumuladas sin picos. |
 
 También dispone de **Reconfigurar** (en el menú **⋮** de la entrada) para actualizar tus credenciales sin perder entidades ni estadísticas históricas, y de **Reautenticación** automática si caducan la contraseña o el `refresh_token`.
 

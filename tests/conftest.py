@@ -173,11 +173,22 @@ def sample_snapshot(sample_contract: ContractInfo) -> ContractSnapshot:
 def mock_recorder_stats() -> Generator[dict[str, Any]]:
     """Patch Home Assistant Recorder statistics helpers for deterministic coordinator tests."""
     recorder_instance = MagicMock()
-    last_stats_store: dict[str, list[dict[str, Any]]] = {}
+    rows_store: dict[str, dict[float, dict[str, Any]]] = {}
 
     async def _fake_executor_job(func: Any, *args: Any) -> dict[str, list[dict[str, Any]]]:
+        func_name = getattr(func, "__name__", "")
+        if func_name == "statistics_during_period":
+            statistic_ids = args[3]
+            result: dict[str, list[dict[str, Any]]] = {}
+            for stat_id in statistic_ids:
+                if stat_rows := rows_store.get(stat_id):
+                    result[stat_id] = [stat_rows[ts] for ts in sorted(stat_rows)]
+            return result
         statistic_id = args[2]
-        return {statistic_id: last_stats_store[statistic_id]} if statistic_id in last_stats_store else {}
+        if stat_rows := rows_store.get(statistic_id):
+            latest_ts = max(stat_rows)
+            return {statistic_id: [stat_rows[latest_ts]]}
+        return {}
 
     recorder_instance.async_add_executor_job = AsyncMock(side_effect=_fake_executor_job)
     added_calls: list[tuple[Any, list[Any]]] = []
@@ -185,11 +196,13 @@ def mock_recorder_stats() -> Generator[dict[str, Any]]:
     def _fake_add_external_stats(hass: Any, metadata: Any, statistics: Any) -> None:
         stats_list = list(statistics)
         added_calls.append((metadata, stats_list))
-        if stats_list:
-            last = stats_list[-1]
-            last_stats_store[metadata["statistic_id"]] = [
-                {"start": last["start"].timestamp(), "sum": last["sum"]}
-            ]
+        stat_rows = rows_store.setdefault(metadata["statistic_id"], {})
+        for item in stats_list:
+            ts = item["start"].timestamp()
+            row: dict[str, Any] = {"start": ts, "sum": item["sum"]}
+            if "state" in item:
+                row["state"] = item["state"]
+            stat_rows[ts] = row
 
     with (
         patch("custom_components.emmasa.coordinator.get_instance", return_value=recorder_instance),
@@ -200,7 +213,7 @@ def mock_recorder_stats() -> Generator[dict[str, Any]]:
     ):
         yield {
             "recorder": recorder_instance,
-            "last_stats": last_stats_store,
+            "rows": rows_store,
             "added_calls": added_calls,
         }
 

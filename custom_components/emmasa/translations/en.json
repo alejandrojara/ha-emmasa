@@ -53,10 +53,10 @@
     "step": {
       "init": {
         "title": "EMMASA polling and history options",
-        "description": "Adjust how often Home Assistant polls EMMASA and how many days of hourly history to backfill on initial sync.",
+        "description": "Adjust how often Home Assistant polls EMMASA and how many days of hourly history to import (increasing this value automatically backfills older available history).",
         "data": {
           "scan_interval_hours": "Polling interval (hours)",
-          "backfill_days": "Initial hourly history backfill (days)"
+          "backfill_days": "Hourly history to import (days)"
         }
       }
     }

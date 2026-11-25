@@ -373,18 +373,21 @@ async def test_options_flow(
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
+    assert mock_config_entry.runtime_data.coordinator.update_interval.total_seconds() == 8 * 3600
+
     result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
 
     result2 = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={CONF_SCAN_INTERVAL_HOURS: 4, CONF_BACKFILL_DAYS: 60},
+        user_input={CONF_SCAN_INTERVAL_HOURS: 12, CONF_BACKFILL_DAYS: 90},
     )
     await hass.async_block_till_done()
 
     assert result2["type"] is FlowResultType.CREATE_ENTRY
     assert mock_config_entry.options == {
-        CONF_SCAN_INTERVAL_HOURS: 4,
-        CONF_BACKFILL_DAYS: 60,
+        CONF_SCAN_INTERVAL_HOURS: 12,
+        CONF_BACKFILL_DAYS: 90,
     }
+    assert mock_config_entry.runtime_data.coordinator.update_interval.total_seconds() == 12 * 3600
